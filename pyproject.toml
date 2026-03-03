@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secforge"
+version = "0.1.0"
+description = "CLI-native API security scanner — blackbox, evidence-based, CI/CD-ready"
+authors = [{name = "SecForge", email = "security@apiscan.ai"}]
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "httpx[http2]>=0.27",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "cryptography>=42",
+    "anyio>=4",
+]
+
+[project.scripts]
+secforge = "secforge.cli.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+]
+ai = [
+    "anthropic>=0.40",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["secforge*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

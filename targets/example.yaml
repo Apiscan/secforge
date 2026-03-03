@@ -1,0 +1,26 @@
+# SecForge Target Profile — Example
+# Copy this file: cp targets/example.yaml targets/myapi.yaml
+
+target:
+  url: https://api.example.com
+  name: "Example API"
+
+auth:
+  type: bearer
+  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+scope:
+  authorized: false           # MUST be true + acknowledged_by filled to use --yes flag
+  acknowledged_by: ""         # Your name
+  date: ""                    # YYYY-MM-DD when authorization was granted
+  notes: "Staging environment — authorized by security team"
+
+headers:
+  Accept-Language: "en-US,en;q=0.9"
+
+options:
+  timeout: 30
+  rate_limit: 10             # Max requests/second — be respectful
+  follow_redirects: true
+  verify_ssl: true
+  user_agent: "SecForge/0.1 (authorized-pentest)"
