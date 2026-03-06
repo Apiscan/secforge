@@ -31,6 +31,7 @@ Configure for Tier 2 testing in your target profile:
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from typing import Optional
@@ -87,7 +88,7 @@ COMMON_ID_PATHS = [
 ]
 
 # Sequential integer IDs to probe
-PROBE_INT_IDS = [1, 2, 3, 4, 5, 100, 1000]
+PROBE_INT_IDS = [1, 2, 3, 100]
 
 # HTTP methods to test beyond GET
 MUTATION_METHODS = ["PUT", "PATCH", "DELETE"]
@@ -130,10 +131,10 @@ class BOLAPlugin(BasePlugin):
         discovered = await _discover_endpoints(client, target)
         all_paths = list({*COMMON_ID_PATHS, *discovered})
 
-        # ── Step 2: Collect User A's accessible resources ─────────────────────────
+        # ── Step 2: Collect User A's accessible resources (concurrent) ───────────
         user_a_resources: list[tuple[str, str, str]] = []  # (path, id, response_body)
 
-        for path_template in all_paths:
+        async def _probe_path(path_template: str) -> tuple[str, str, str] | None:
             for probe_id in PROBE_INT_IDS:
                 path = path_template.replace("{id}", str(probe_id))
                 try:
@@ -141,10 +142,13 @@ class BOLAPlugin(BasePlugin):
                     if resp.status_code == 200:
                         body = _safe_text(resp)
                         if _looks_like_data(body):
-                            user_a_resources.append((path_template, str(probe_id), body))
-                            break  # One working ID per path is enough for Tier 1
+                            return (path_template, str(probe_id), body)
                 except httpx.HTTPError:
                     continue
+            return None
+
+        results = await asyncio.gather(*[_probe_path(p) for p in all_paths], return_exceptions=True)
+        user_a_resources = [r for r in results if r and not isinstance(r, Exception)]
 
         # ── Step 3: Tier 2 — Confirmed Cross-User Testing ─────────────────────────
         if target.user_b_auth and user_a_resources:

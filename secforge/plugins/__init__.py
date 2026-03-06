@@ -14,6 +14,8 @@ from secforge.plugins.rest.ssrf import SSRFPlugin
 from secforge.plugins.rest.injection import InjectionPlugin
 from secforge.plugins.rest.mass_assignment import MassAssignmentPlugin
 from secforge.plugins.rest.misconfiguration import MisconfigurationPlugin
+from secforge.plugins.rest.bfla import BFLAPlugin
+from secforge.plugins.rest.sensitive_data import SensitiveDataPlugin
 
 ALL_PLUGINS: dict[str, type] = {
     # Phase 1 — Foundation
@@ -36,6 +38,9 @@ ALL_PLUGINS: dict[str, type] = {
     "injection": InjectionPlugin,
     "mass_assignment": MassAssignmentPlugin,
     "misconfiguration": MisconfigurationPlugin,
+    # Phase 7 — OWASP Coverage Completion
+    "bfla": BFLAPlugin,
+    "sensitive_data": SensitiveDataPlugin,
 }
 
 DEFAULT_PLUGINS = list(ALL_PLUGINS.keys())
