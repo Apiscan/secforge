@@ -1,7 +1,8 @@
-# ApiScan — API Security Scanner
+# ApiScan CLI — API Security Scanner
 
 <p align="center">
-  <img src="https://img.shields.io/badge/OWASP_API_Top_10-10%2F10_Covered-00ff88?style=flat-square" />
+  <img src="https://img.shields.io/badge/OWASP_API_Top_10-Full_Coverage-00ff88?style=flat-square" />
+  <img src="https://img.shields.io/badge/Plugins-16-00f0ff?style=flat-square" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-00f0ff?style=flat-square" />
   <img src="https://img.shields.io/badge/License-MIT-white?style=flat-square" />
   <img src="https://img.shields.io/badge/Scan_Time-under_15s-00ff88?style=flat-square" />
@@ -9,11 +10,11 @@
 
 <p align="center">
   <strong>Find what attackers find. Before they do.</strong><br>
-  CLI-native API security scanner with 16 security plugins and AI attack chain correlation.
+  CLI-native API security scanner with 16 plugins and AI attack chain correlation.
 </p>
 
 <p align="center">
-  <a href="https://app.apiscan.ai">Web App</a> · <a href="https://apiscan.ai">Docs</a> · <a href="https://apiscan.ai#pricing">Pricing</a>
+  <a href="https://app.apiscan.ai">Web App</a> · <a href="https://apiscan.ai/docs">Docs</a> · <a href="https://apiscan.ai#pricing">Pricing</a> · <a href="https://apiscan.ai/blog">Blog</a>
 </p>
 
 ---
@@ -22,33 +23,38 @@
 
 Most security scanners tell you *"CORS is misconfigured."*
 
-ApiScan tells you: *"Your CORS misconfiguration + JWT signature bypass = an attacker can impersonate any user from a malicious webpage."*
+ApiScan tells you: *"Your CORS misconfiguration + JWT signature bypass = an attacker can impersonate any user from a malicious webpage in 3 HTTP requests."*
 
-That's the difference between a list of findings and an **attack chain** — the story of how vulnerabilities combine into a real exploit. That's what a senior pentester does after an engagement. ApiScan does it automatically.
+That's the difference between a list of findings and an **attack chain** — the story of how vulnerabilities combine into a real exploit. That's what a senior pentester produces after an engagement. ApiScan does it automatically.
 
 ```
 $ secforge scan --profile target.yaml --yes
 
-  [tls]        ✓ PASS
-  [headers]    ⚠ 2 missing headers (HSTS, CSP)
-  [cors]       ✗ ARBITRARY ORIGIN REFLECTION
-  [auth]       ✓ PASS
-  [jwt]        ✗ ALG:NONE ACCEPTED
-  [rate_limit] ✓ PASS
-  [bola]       ✓ PASS
-  [oauth2]     ✓ PASS
-  [apikey]     ✓ PASS
-  [graphql]    ✓ PASS
-  [ssrf]       ✓ PASS
+  [tls]             ✓ PASS
+  [headers]         ⚠ 2 missing headers (HSTS, CSP)
+  [cors]            ✗ ARBITRARY ORIGIN REFLECTION
+  [auth]            ✓ PASS
+  [jwt]             ✗ ALG:NONE ACCEPTED
+  [rate_limit]      ✓ PASS
+  [bola]            ✓ PASS
+  [oauth2]          ✓ PASS
+  [apikey]          ✓ PASS
+  [graphql]         ✓ PASS
+  [ssrf]            ✓ PASS
+  [injection]       ✓ PASS
+  [mass_assignment] ✓ PASS
+  [misconfiguration]✓ PASS
+  [bfla]            ✓ PASS
+  [sensitive_data]  ✓ PASS
 
   ──────────────────────────────────────────────
-  CRITICAL ATTACK CHAIN DETECTED
+  ⚡ CRITICAL ATTACK CHAIN DETECTED
   CORS Reflection + JWT Algorithm None → Account Takeover
 
   Step 1: Attacker hosts malicious page at https://evil.com
   Step 2: CORS allows evil.com to make credentialed requests
   Step 3: JWT endpoint accepts alg:none — no signature required
-  Step 4: Attacker crafts token for victim user ID, sends via CORS
+  Step 4: Forge token for any user_id, read response via CORS
   Result: Full authenticated API access as any user
 
   PoC: curl -H "Origin: https://evil.com" \
@@ -64,14 +70,17 @@ $ secforge scan --profile target.yaml --yes
 
 ```bash
 pip install secforge
+```
 
-# Or from source
-git clone https://github.com/your-org/secforge
+**Or from source:**
+
+```bash
+git clone https://github.com/Apiscan/secforge
 cd secforge
 pip install -e ".[dev]"
 ```
 
-**Requirements:** Python 3.10+, no external dependencies at runtime.
+**Requirements:** Python 3.10+, no external runtime dependencies.
 
 ## Quick Start
 
@@ -93,16 +102,13 @@ target:
 secforge scan --profile target.yaml --yes
 ```
 
-**3. Get a report:**
+**3. Export a report:**
 
 ```bash
-# Terminal output (default)
-secforge scan --profile target.yaml --yes
-
-# JSON report
+# JSON
 secforge scan --profile target.yaml --yes --output report.json
 
-# Markdown report
+# Markdown
 secforge scan --profile target.yaml --yes --output report.md --format markdown
 ```
 
@@ -125,7 +131,7 @@ All 16 plugins run in parallel. Every finding requires real HTTP evidence — no
 | Plugin | OWASP API | What It Tests |
 |--------|-----------|---------------|
 | `tls` | API8 | Protocol downgrade, cert expiry, self-signed, hostname mismatch, weak ciphers |
-| `headers` | API8 | HSTS, CSP, X-Frame-Options, CORP, COEP, COOP — 6 required + 3 disclosure checks |
+| `headers` | API8 | HSTS, CSP, X-Frame-Options, CORP, COEP — 6 required headers + 3 disclosure checks |
 | `cors` | API8 | Arbitrary origin reflection, null origin bypass, subdomain prefix attacks |
 | `bola` | API1 | Object-level auth bypass via sequential ID probing |
 | `auth` | API2 | Missing auth on sensitive routes, JWT alg:none, API keys in URLs |
@@ -135,6 +141,11 @@ All 16 plugins run in parallel. Every finding requires real HTTP evidence — no
 | `apikey` | API2 | Entropy analysis, vendor pattern detection, test key flags, response scanning |
 | `graphql` | API8 | Introspection, batching attacks, depth limits, field suggestions, GET mutation CSRF |
 | `ssrf` | API7 | Cloud metadata probes (AWS/GCP/DO), localhost injection, open redirect chains |
+| `injection` | API3 | SQL injection, NoSQL injection, OS command injection via API parameters |
+| `mass_assignment` | API3 | Extra field acceptance, privilege escalation via role/admin flags in request body |
+| `misconfiguration` | API8 | Debug endpoints, version disclosure, stack traces, default credentials |
+| `bfla` | API5 | Function-level auth bypass — horizontal and vertical privilege escalation |
+| `sensitive_data` | API3 | PII, secrets, tokens, and key material in API response bodies |
 
 ## Severity Levels
 
@@ -156,7 +167,7 @@ target:
   plugins: all                          # all | [tls, cors, jwt] | comma-separated
   rate_limit_rps: 10                    # requests per second (default: 10)
   timeout_s: 30                         # request timeout (default: 30)
-  scope_acknowledged: true              # REQUIRED — you confirm authorization
+  scope_acknowledged: true              # REQUIRED — confirms you have authorization
 ```
 
 ## Output Format
@@ -222,6 +233,8 @@ class MyPlugin(BasePlugin):
         return findings
 ```
 
+Place the file in `secforge/plugins/my_plugin.py` and it will be auto-discovered.
+
 ## Ethics & Legal
 
 **You must only scan systems you own or have explicit written authorization to test.**
@@ -234,30 +247,33 @@ The authors take no responsibility for misuse.
 
 The SaaS version at [app.apiscan.ai](https://app.apiscan.ai) adds a multi-stage AI analysis pipeline that:
 - Removes false positives and re-classifies severity in context
-- Verifies exploitability and generates PoC curl commands
+- Verifies exploitability with real HTTP evidence at 95%+ confidence
 - Correlates findings into multi-step attack chains
-- Writes an executive summary with business impact
+- Generates an executive report with business impact and fix code
 
-Free tier: 5 scans/month, 3 plugins.
-Pro ($39/mo): all 16 plugins, full AI chain, 50 scans/month.
+| Plan | Scans/mo | Plugins | AI Chain |
+|------|----------|---------|----------|
+| Free | 5 | 3 (TLS, Headers, CORS) | — |
+| Pro ($39/mo) | 50 | All 16 | ✓ Full chain + PDF |
+| Enterprise ($299/mo) | Unlimited | All 16 | ✓ + AI Pentester |
 
 ## Contributing
 
-Pull requests welcome. For new plugins, see the [plugin development guide](#writing-a-custom-plugin) above.
+Pull requests welcome. For new plugins, see the [custom plugin guide](#writing-a-custom-plugin) above.
 
 Please include:
 - A test using `respx` mocks (see `tests/` for examples)
-- Evidence requirement documentation (what constitutes a CONFIRMED finding)
+- Evidence requirement documentation (what constitutes a `CONFIRMED` finding)
 - Remediation guidance
 
 ## License
 
-MIT — CLI and plugins are free and open source.
+MIT — the CLI and all plugins are free and open source.
 
 The AI chain analysis pipeline is proprietary and available via [app.apiscan.ai](https://app.apiscan.ai).
 
 ---
 
 <p align="center">
-  Built by <a href="https://apiscan.ai">ApiScan</a> · <a href="https://app.apiscan.ai">Free scan</a> · <a href="https://apiscan.ai#pricing">Pricing</a>
+  Built by <a href="https://apiscan.ai">ApiScan</a> · <a href="https://app.apiscan.ai">Free scan</a> · <a href="https://apiscan.ai/blog">Blog</a> · <a href="https://apiscan.ai#pricing">Pricing</a>
 </p>
