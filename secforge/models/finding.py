@@ -1,4 +1,4 @@
-"""Finding model — the core output unit of every SecForge plugin."""
+"""Finding model — the core output unit of every ApiScan plugin."""
 
 from __future__ import annotations
 

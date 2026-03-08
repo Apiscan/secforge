@@ -28,7 +28,7 @@ def diff_cmd(
     fail_on_new: bool = typer.Option(False, "--fail-on-new", help="Exit 1 if new findings introduced"),
 ):
     """
-    Compare two SecForge scan reports and show what changed.
+    Compare two ApiScan scan reports and show what changed.
 
     Example:
       secforge diff reports/before.json reports/after.json
@@ -119,7 +119,7 @@ def _print_diff(diff: dict) -> None:
         f"[red]🆕 New: {score['new_count']}[/red]   "
         f"[yellow]⏳ Persists: {score['persists_count']}[/yellow]   "
         f"[{net_color}]Net: {net_str}[/{net_color}]",
-        title="[bold]SecForge Diff Report[/bold]",
+        title="[bold]ApiScan Diff Report[/bold]",
         border_style="cyan",
     ))
 
@@ -154,7 +154,7 @@ def _to_markdown_diff(diff: dict) -> str:
     net_str = f"{'−' if net < 0 else '+' if net > 0 else ''}{abs(net)}" if net != 0 else "0"
 
     lines = [
-        "# SecForge Diff Report",
+        "# ApiScan Diff Report",
         "",
         f"| | Before | After |",
         f"|--|--|--|",

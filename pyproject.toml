@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "secforge"
 version = "0.1.0"
-description = "CLI-native API security scanner — blackbox, evidence-based, CI/CD-ready"
-authors = [{name = "SecForge", email = "security@apiscan.ai"}]
+description = "ApiScan — CLI-native API security scanner — blackbox, evidence-based, CI/CD-ready"
+authors = [{name = "ApiScan", email = "security@apiscan.ai"}]
 requires-python = ">=3.11"
 dependencies = [
     "typer>=0.12",

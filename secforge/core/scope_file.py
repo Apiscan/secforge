@@ -3,7 +3,7 @@ Scope file — pre-authorized target registry for CI/CD pipelines.
 
 Instead of interactive prompts, teams maintain a scope.yml that lists
 every authorized target. The CI pipeline passes --scope-file scope.yml
-and SecForge verifies the scan target is in the authorized list.
+and ApiScan verifies the scan target is in the authorized list.
 
 Format:
   authorized_targets:
@@ -77,7 +77,7 @@ class ScopeFile:
 
 
 SCOPE_FILE_TEMPLATE = """\
-# SecForge Scope File
+# ApiScan Scope File
 # List all targets your team is authorized to scan.
 # Use with: secforge scan --scope-file scope.yml --url https://api.example.com
 

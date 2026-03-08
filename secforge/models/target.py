@@ -48,7 +48,7 @@ class ScanOptions(BaseModel):
     follow_redirects: bool = True
     verify_ssl: bool = True
     max_redirects: int = 5
-    user_agent: str = "SecForge/0.1 (authorized-pentest)"
+    user_agent: str = "ApiScan/1.0 (authorized-pentest)"
 
 
 class TargetConfig(BaseModel):
@@ -57,7 +57,7 @@ class TargetConfig(BaseModel):
     auth: AuthConfig = AuthConfig()
     # Optional second user auth — enables real cross-user BOLA/IDOR testing.
     # user_a_auth is an alias for auth (the primary token).
-    # Provide user_b_auth to allow SecForge to attempt accessing user A's
+    # Provide user_b_auth to allow ApiScan to attempt accessing user A's
     # resources as user B, confirming object-level authorization failures.
     user_b_auth: Optional[AuthConfig] = None
     scope: ScopeConfig = ScopeConfig()

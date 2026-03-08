@@ -9,7 +9,7 @@ from pydantic import BaseModel
 class Evidence(BaseModel):
     """
     A captured request/response pair that proves a finding exists.
-    SecForge never reports without evidence — this is the contract.
+    ApiScan never reports without evidence — this is the contract.
     """
     request_method: str = ""
     request_url: str = ""

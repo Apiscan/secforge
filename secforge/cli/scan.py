@@ -109,7 +109,7 @@ def scan_cmd(
     plugin_instances = [ALL_PLUGINS[n]() for n in selected_names]
 
     console.print(
-        f"\n[bold]🔐 SecForge[/bold] scanning [cyan]{target.url}[/cyan]\n"
+        f"\n[bold]🔐 ApiScan[/bold] scanning [cyan]{target.url}[/cyan]\n"
         f"[dim]Plugins: {', '.join(selected_names)}[/dim]\n"
     )
 

@@ -1,4 +1,4 @@
-"""SecForge CLI — main entry point."""
+"""ApiScan CLI — main entry point."""
 
 import typer
 from rich.console import Console
@@ -9,7 +9,7 @@ from secforge.cli.config_cmd import app as config_app
 
 app = typer.Typer(
     name="secforge",
-    help="🔐 SecForge — CLI-native API security scanner. Blackbox. Evidence-based. CI/CD-ready.",
+    help="🔐 ApiScan — CLI-native API security scanner. Blackbox. Evidence-based. CI/CD-ready.",
     rich_markup_mode="rich",
     no_args_is_help=True,
 )

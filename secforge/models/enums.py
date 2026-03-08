@@ -1,4 +1,4 @@
-"""Core enumerations for SecForge findings."""
+"""Core enumerations for ApiScan findings."""
 
 from enum import Enum
 

@@ -1,5 +1,5 @@
 """
-BasePlugin — the interface every SecForge check must implement.
+BasePlugin — the interface every ApiScan check must implement.
 
 Adding a new check = subclass BasePlugin, implement run().
 The plugin system is designed to be zero-coupling: plugins don't

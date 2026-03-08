@@ -1,5 +1,5 @@
 """
-Async HTTP client for SecForge.
+Async HTTP client for ApiScan.
 
 Wraps httpx with:
 - Auth injection (Bearer, API key, Basic)
@@ -47,7 +47,7 @@ class RateLimiter:
 
 class SecForgeClient:
     """
-    The SecForge HTTP client. Use as an async context manager.
+    The ApiScan HTTP client. Use as an async context manager.
 
     Usage:
         async with SecForgeClient(target) as client:

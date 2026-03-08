@@ -327,9 +327,9 @@ async def _test_registration_escalation(
 
     base_payload = {
         "email": test_email,
-        "password": "SecForgeProbe2026!",
+        "password": "ApiScanProbe2026!",
         "username": f"secforge_{rand_suffix}",
-        "name": "SecForge Probe",
+        "name": "ApiScan Probe",
     }
 
     for path in REGISTRATION_PATHS:

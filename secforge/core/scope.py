@@ -1,7 +1,7 @@
 """
 Scope enforcement — authorization acknowledgment before any scan.
 
-This is non-negotiable. SecForge will never scan a target without
+This is non-negotiable. ApiScan will never scan a target without
 explicit authorization from the operator. Built in from day one.
 """
 
@@ -23,7 +23,7 @@ console = Console()
 
 SCOPE_BANNER = """[bold red]⚠️  AUTHORIZATION REQUIRED[/bold red]
 
-SecForge performs active security testing that may:
+ApiScan performs active security testing that may:
   • Generate unusual traffic patterns
   • Trigger security alerts and WAF rules
   • Temporarily affect target availability
@@ -37,7 +37,7 @@ Unauthorized scanning is illegal under laws including:
   • Computer Misuse Act — UK
   • Cybercrime laws in your jurisdiction
 
-SecForge is not responsible for unauthorized use."""
+ApiScan is not responsible for unauthorized use."""
 
 
 def enforce_scope(target: TargetConfig, skip_prompt: bool = False) -> bool:
