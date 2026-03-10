@@ -5,9 +5,15 @@ Maps to: OWASP API7:2023 — Server-Side Request Forgery
 
 Strategy (blackbox, no OOB callback server):
   1. Inject cloud metadata / localhost URLs into common SSRF-prone parameters
-  2. Detect server-side fetch via: metadata canaries in body, SSRF error strings, timing
+  2. Detect server-side fetch via: metadata canaries in 2xx body, SSRF error strings, timing
   3. Detect open redirect chains that can be weaponized for SSRF
   4. Flag proxy/fetch endpoints for manual follow-up
+
+Evidence integrity rules:
+  - CONFIRMED requires canary in 2xx response body (proves the server fetched the URL)
+  - PROBABLE requires clear SSRF error signal string in response body
+  - SPECULATIVE only for timing anomaly (server may have attempted fetch)
+  - All Evidence uses Evidence.from_httpx() for real request/response capture
 """
 
 from __future__ import annotations
@@ -48,11 +54,15 @@ BYPASS_PAYLOADS = [
     "http://2130706433/",    # Decimal 127.0.0.1
 ]
 
-# Strings in response body that prove server resolved/fetched the URL
+# Strings that prove the server resolved and returned cloud metadata.
+# Only checked in 2xx responses to avoid false positives on error pages.
 META_CANARIES = [
-    "ami-id", "instance-id", "local-ipv4", "iam/security-credentials",
+    "ami-id", "instance-id", "local-ipv4",
+    "iam/security-credentials",
     "computeMetadata", "instance/attributes",
-    "access_token", "AccessKeyId", "SecretAccessKey",
+    "AccessKeyId", "SecretAccessKey",
+    # NOTE: "access_token" intentionally excluded — it appears in OAuth error pages
+    #       and would create false positives on 4xx responses.
 ]
 
 SSRF_ERROR_SIGNALS = [
@@ -120,88 +130,122 @@ class SSRFPlugin(BasePlugin):
 
                     body_lower = body.lower()
 
-                    # Check for cloud metadata secrets in response body
-                    for canary in META_CANARIES:
-                        if canary.lower() in body_lower:
-                            findings.append(Finding(
-                                plugin=self.name,
-                                title="SSRF — Cloud Metadata Exposed",
-                                severity=Severity.CRITICAL,
-                                status=FindingStatus.CONFIRMED,
-                                description=(
-                                    f"The server fetched the injected URL `{payload}` via `?{param}=` "
-                                    f"and returned cloud metadata in the response. "
-                                    f"Canary `{canary}` found in body. "
-                                    "An attacker can extract IAM credentials, instance tokens, or internal config."
-                                ),
-                                endpoint=f"{target.url}{path}",
-                                evidence=[Evidence(
-                                    request=f"GET {target.url}{path}",
-                                    response_status=resp.status_code,
-                                    response_body=body[:1000],
-                                    notes=f"Canary '{canary}' found in response body",
-                                )],
-                                remediation=(
-                                    "Block server-side HTTP requests to link-local (169.254.169.254) and "
-                                    "private IP ranges. Use an allowlist of permitted external hosts. "
-                                    "Validate and sanitize all URL parameters before making outbound requests."
-                                ),
-                            ))
-                            return findings  # Critical — stop immediately
+                    # ── CONFIRMED: Canary in 2xx response body ────────────────
+                    # Only trigger on 2xx — error pages (4xx/5xx) can contain
+                    # these strings in unrelated context (e.g. OAuth error messages).
+                    if resp.status_code < 300:
+                        for canary in META_CANARIES:
+                            if canary.lower() in body_lower:
+                                findings.append(Finding(
+                                    plugin=self.name,
+                                    title="SSRF — Cloud Metadata Exposed",
+                                    severity=Severity.CRITICAL,
+                                    status=FindingStatus.CONFIRMED,
+                                    owasp_id=self.owasp_id,
+                                    cwe_id="CWE-918",
+                                    description=(
+                                        f"The server fetched the injected URL `{payload}` via the "
+                                        f"`?{param}=` parameter and returned cloud metadata in the "
+                                        f"response (canary: `{canary}`). An attacker can extract "
+                                        "IAM credentials, instance identity tokens, or internal "
+                                        "service configuration."
+                                    ),
+                                    endpoint=f"{target.url}{path}",
+                                    evidence=[Evidence.from_httpx(
+                                        resp.request, resp,
+                                        note=(
+                                            f"Injected cloud metadata URL via ?{param}=. "
+                                            f"Canary '{canary}' found in 2xx response body — "
+                                            "server fetched the injected URL."
+                                        ),
+                                    )],
+                                    remediation=(
+                                        "Block server-side HTTP requests to link-local "
+                                        "(169.254.169.254) and private IP ranges (RFC 1918). "
+                                        "Use an allowlist of permitted external hosts. "
+                                        "Validate and sanitize all URL parameters before "
+                                        "making outbound requests."
+                                    ),
+                                    references=[
+                                        "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+                                        "https://portswigger.net/web-security/ssrf",
+                                    ],
+                                ))
+                                return findings  # Critical confirmed — stop immediately
 
-                    # Check for SSRF error signals (proves server tried to fetch)
+                    # ── PROBABLE: SSRF error signal in response body ──────────
+                    # Error strings like "connection refused" prove the server
+                    # attempted an outbound connection to the injected URL.
                     for signal in SSRF_ERROR_SIGNALS:
                         if signal in body_lower:
                             findings.append(Finding(
                                 plugin=self.name,
-                                title="SSRF — Server-Side HTTP Request Detected",
+                                title="SSRF — Server Attempted Outbound Connection",
                                 severity=Severity.HIGH,
                                 status=FindingStatus.PROBABLE,
+                                owasp_id=self.owasp_id,
+                                cwe_id="CWE-918",
                                 description=(
                                     f"Injecting `{payload}` via `?{param}=` produced an error "
-                                    f"message (`{signal}`) indicating the server attempted an outbound "
-                                    "HTTP request to the injected URL. "
-                                    "Confirm with an OOB callback server (e.g. Burp Collaborator)."
+                                    f"message (`{signal}`) indicating the server attempted an "
+                                    "outbound HTTP request to the injected URL. "
+                                    "Confirm impact with an OOB callback server (Burp Collaborator)."
                                 ),
                                 endpoint=f"{target.url}{path}",
-                                evidence=[Evidence(
-                                    request=f"GET {target.url}{path}",
-                                    response_status=resp.status_code,
-                                    response_body=body[:500],
-                                    notes=f"SSRF signal '{signal}' found in response",
+                                evidence=[Evidence.from_httpx(
+                                    resp.request, resp,
+                                    note=(
+                                        f"SSRF error signal '{signal}' found in response body. "
+                                        "Server likely attempted outbound request to injected URL."
+                                    ),
                                 )],
                                 remediation=(
-                                    "Sanitize URL parameters server-side. Block requests to RFC1918 "
-                                    "private ranges and link-local addresses. Use an HTTP egress allowlist."
+                                    "Sanitize URL parameters server-side. Block requests to "
+                                    "RFC 1918 private ranges and link-local addresses. "
+                                    "Use an HTTP egress allowlist."
                                 ),
+                                references=[
+                                    "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+                                ],
                             ))
                             return findings
 
-                    # Timing anomaly on cloud metadata probes
+                    # ── SPECULATIVE: Timing anomaly on metadata probe ─────────
+                    # A slow response to 169.254.169.254 may indicate a server-side
+                    # fetch attempt timing out. Not confirmed — requires OOB verification.
                     if "169.254.169.254" in payload and elapsed > 4.0:
                         findings.append(Finding(
                             plugin=self.name,
                             title="SSRF — Timing Anomaly on Metadata Probe",
                             severity=Severity.MEDIUM,
                             status=FindingStatus.PROBABLE,
+                            owasp_id=self.owasp_id,
+                            cwe_id="CWE-918",
                             description=(
-                                f"`?{param}={payload}` took {elapsed:.1f}s — the server may be "
-                                "attempting an outbound connection to 169.254.169.254 before timing out. "
-                                "Verify with a Burp Collaborator payload."
+                                f"Request to `?{param}={payload}` took {elapsed:.1f}s, "
+                                "which may indicate the server is attempting an outbound "
+                                "connection to 169.254.169.254 before timing out. "
+                                "Verify with a Burp Collaborator OOB payload."
                             ),
                             endpoint=f"{target.url}{path}",
-                            evidence=[Evidence(
-                                request=f"GET {target.url}{path}",
-                                response_status=resp.status_code,
-                                notes=f"Response took {elapsed:.1f}s (baseline ≪ 1s)",
+                            evidence=[Evidence.from_httpx(
+                                resp.request, resp,
+                                note=(
+                                    f"Response time: {elapsed:.1f}s (expected: <1s). "
+                                    "Unusual delay suggests server may be attempting "
+                                    "outbound connection to metadata endpoint."
+                                ),
                             )],
-                            remediation="Validate that the application does not make outbound HTTP requests based on user-controlled URL parameters.",
+                            remediation=(
+                                "Validate that the application does not make outbound HTTP "
+                                "requests based on user-controlled URL parameters."
+                            ),
                         ))
 
                 except Exception:
                     pass
 
-        # POST body probes
+        # ── POST body probes ──────────────────────────────────────────────────
         for param in ["url", "redirect", "callback", "webhook"]:
             for payload in CLOUD_META_PAYLOADS[:1]:
                 try:
@@ -211,25 +255,35 @@ class SSRFPlugin(BasePlugin):
                         body = resp.text[:2000]
                     except Exception:
                         pass
-                    for canary in META_CANARIES:
-                        if canary.lower() in body.lower():
-                            findings.append(Finding(
-                                plugin=self.name,
-                                title="SSRF — Cloud Metadata via POST Body",
-                                severity=Severity.CRITICAL,
-                                status=FindingStatus.CONFIRMED,
-                                description=(
-                                    f"POST body `{{{param}: {payload}}}` returned cloud metadata. "
-                                    f"Canary `{canary}` found in response."
-                                ),
-                                endpoint=f"{target.url}/api/",
-                                evidence=[Evidence(
-                                    request=f"POST {target.url}/api/ body={{{param}: {payload}}}",
-                                    response_status=resp.status_code,
-                                    response_body=body[:500],
-                                )],
-                                remediation="Block SSRF via POST body URL parameters. Validate all outbound URLs server-side.",
-                            ))
+                    # Only trigger on 2xx responses
+                    if resp.status_code < 300:
+                        for canary in META_CANARIES:
+                            if canary.lower() in body.lower():
+                                findings.append(Finding(
+                                    plugin=self.name,
+                                    title="SSRF — Cloud Metadata via POST Body",
+                                    severity=Severity.CRITICAL,
+                                    status=FindingStatus.CONFIRMED,
+                                    owasp_id=self.owasp_id,
+                                    cwe_id="CWE-918",
+                                    description=(
+                                        f"POST body `{{{param}: {payload}}}` caused the server to "
+                                        f"fetch the injected URL and return cloud metadata. "
+                                        f"Canary `{canary}` confirmed in 2xx response body."
+                                    ),
+                                    endpoint=f"{target.url}/api/",
+                                    evidence=[Evidence.from_httpx(
+                                        resp.request, resp,
+                                        note=(
+                                            f"Canary '{canary}' found in 2xx response body "
+                                            f"after POST with {{{param}: {payload}}}."
+                                        ),
+                                    )],
+                                    remediation=(
+                                        "Block SSRF via POST body URL parameters. "
+                                        "Validate all outbound URLs server-side."
+                                    ),
+                                ))
                 except Exception:
                     pass
 
@@ -251,22 +305,28 @@ class SSRFPlugin(BasePlugin):
                         title="Open Redirect — SSRF Escalation Vector",
                         severity=Severity.MEDIUM,
                         status=FindingStatus.CONFIRMED,
+                        owasp_id=self.owasp_id,
+                        cwe_id="CWE-601",
                         description=(
                             f"The `{param}` parameter value is reflected directly into the "
                             "`Location` header without validation. While not direct SSRF, open "
                             "redirects can be chained with SSRF vulnerabilities and enable phishing."
                         ),
                         endpoint=f"{target.url}{path}",
-                        evidence=[Evidence(
-                            request=f"GET {target.url}{path}",
-                            response_status=resp.status_code,
-                            response_headers=dict(resp.headers),
-                            notes=f"Location: {location}",
+                        evidence=[Evidence.from_httpx(
+                            resp.request, resp,
+                            note=(
+                                f"Location header reflects injected value: {location}. "
+                                "No redirect validation in place."
+                            ),
                         )],
                         remediation=(
                             "Validate redirect destinations against an allowlist of permitted domains. "
                             "Reject redirect parameters pointing to external hosts."
                         ),
+                        references=[
+                            "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html",
+                        ],
                     ))
             except Exception:
                 pass
@@ -281,26 +341,33 @@ class SSRFPlugin(BasePlugin):
         for path in PROXY_PATHS:
             try:
                 resp = await client.get(path)
+                # 404/410 = not found, 429 = rate limited (not meaningful for SSRF)
                 if resp.status_code not in (404, 410, 429):
                     findings.append(Finding(
                         plugin=self.name,
                         title="SSRF — Proxy/Fetch Endpoint Detected",
                         severity=Severity.MEDIUM,
                         status=FindingStatus.PROBABLE,
+                        owasp_id=self.owasp_id,
+                        cwe_id="CWE-918",
                         description=(
                             f"`{path}` returned HTTP {resp.status_code}. "
                             "Proxy and fetch endpoints are commonly vulnerable to SSRF. "
-                            "Manual testing with internal URLs and an OOB callback (e.g. Burp Collaborator) recommended."
+                            "Manual testing with internal URLs and an OOB callback (e.g. "
+                            "Burp Collaborator) is recommended."
                         ),
                         endpoint=f"{target.url}{path}",
-                        evidence=[Evidence(
-                            request=f"GET {target.url}{path}",
-                            response_status=resp.status_code,
-                            notes="Endpoint exists — manual SSRF probe recommended",
+                        evidence=[Evidence.from_httpx(
+                            resp.request, resp,
+                            note=(
+                                f"Endpoint {path} exists (HTTP {resp.status_code}). "
+                                "Proxy/fetch endpoints are high-risk SSRF candidates — "
+                                "manual verification recommended."
+                            ),
                         )],
                         remediation=(
                             "If this endpoint is intentional, enforce strict URL allowlisting. "
-                            "Block requests to RFC1918 ranges, localhost, and link-local addresses."
+                            "Block requests to RFC 1918 ranges, localhost, and link-local addresses."
                         ),
                     ))
             except Exception:
