@@ -17,7 +17,7 @@ from secforge.core.config import load_target, load_target_from_url
 from secforge.core.scope import enforce_scope
 from secforge.core.scope_file import ScopeFile, SCOPE_FILE_TEMPLATE
 from secforge.core.client import SecForgeClient
-from secforge.core.reporter import ScanResult, print_summary, to_json, to_markdown
+from secforge.core.reporter import ScanResult, print_summary, to_json, to_markdown, to_sarif
 from secforge.core.html_report import to_html
 from secforge.core.ai_triage import triage_findings
 from secforge.models.enums import Severity
@@ -169,6 +169,11 @@ def scan_cmd(
         md = to_markdown(result, path)
         if fmt == "markdown" and not out_file:
             console.print(md)
+
+    if fmt in ("sarif",):
+        path = str(out_file) if out_file else "apiscan-results.sarif"
+        to_sarif(result, path)
+        console.print(f"[green]✅ SARIF report written to:[/green] {path}")
 
     if fmt in ("html", "all"):
         path = str(out_file) if out_file else None

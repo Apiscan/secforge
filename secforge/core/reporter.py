@@ -265,3 +265,84 @@ def _markdown_finding(f: Finding) -> list[str]:
 
     lines.append("---\n")
     return lines
+
+
+def to_sarif(result: "ScanResult", path: str | None = None) -> str:
+    """Export findings as SARIF 2.1.0 for GitHub Code Scanning / Security tab."""
+    import json, time
+
+    rules = {}
+    sarif_results = []
+
+    for f in result.findings:
+        plugin = getattr(f, "plugin", "unknown")
+        rule_id = f"APISCAN-{plugin.upper()}"
+        sev = str(getattr(f, "severity", "MEDIUM")).upper()
+
+        # SARIF severity levels
+        sarif_level = {
+            "CRITICAL": "error", "HIGH": "error",
+            "MEDIUM": "warning", "LOW": "note", "INFO": "none"
+        }.get(sev, "warning")
+
+        # Dedupe rules
+        if rule_id not in rules:
+            rules[rule_id] = {
+                "id": rule_id,
+                "name": f.title if hasattr(f, "title") else rule_id,
+                "shortDescription": {"text": f.title if hasattr(f, "title") else rule_id},
+                "fullDescription": {"text": getattr(f, "description", "") or ""},
+                "defaultConfiguration": {"level": sarif_level},
+                "properties": {
+                    "tags": ["security", "api", plugin],
+                    "precision": "medium",
+                    "problem.severity": sev.lower()
+                }
+            }
+
+        sarif_results.append({
+            "ruleId": rule_id,
+            "level": sarif_level,
+            "message": {
+                "text": (getattr(f, "description", "") or getattr(f, "title", rule_id))
+            },
+            "locations": [{
+                "physicalLocation": {
+                    "artifactLocation": {
+                        "uri": str(result.target.url),
+                        "uriBaseId": "API"
+                    }
+                }
+            }],
+            "properties": {
+                "severity": sev,
+                "plugin": plugin,
+                "cwe": getattr(f, "cwe_id", None),
+            }
+        })
+
+    sarif = {
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "ApiScan",
+                    "version": "0.5.0",
+                    "informationUri": "https://apiscan.ai",
+                    "rules": list(rules.values())
+                }
+            },
+            "results": sarif_results,
+            "properties": {
+                "scannedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "targetUrl": str(result.target.url)
+            }
+        }]
+    }
+
+    sarif_str = json.dumps(sarif, indent=2)
+    if path:
+        with open(path, "w") as fh:
+            fh.write(sarif_str)
+    return sarif_str
