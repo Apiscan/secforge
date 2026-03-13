@@ -16,6 +16,9 @@ from secforge.plugins.rest.mass_assignment import MassAssignmentPlugin
 from secforge.plugins.rest.misconfiguration import MisconfigurationPlugin
 from secforge.plugins.rest.bfla import BFLAPlugin
 from secforge.plugins.rest.sensitive_data import SensitiveDataPlugin
+from secforge.plugins.rest.business_logic import BusinessLogicPlugin
+from secforge.plugins.rest.inventory import InventoryPlugin
+from secforge.plugins.rest.unsafe_consumption import UnsafeConsumptionPlugin
 
 ALL_PLUGINS: dict[str, type] = {
     # Phase 1 — Foundation
@@ -41,6 +44,10 @@ ALL_PLUGINS: dict[str, type] = {
     # Phase 7 — OWASP Coverage Completion
     "bfla": BFLAPlugin,
     "sensitive_data": SensitiveDataPlugin,
+    # Phase 8 — Full OWASP API Top 10
+    "business_logic": BusinessLogicPlugin,
+    "inventory": InventoryPlugin,
+    "unsafe_consumption": UnsafeConsumptionPlugin,
 }
 
 DEFAULT_PLUGINS = list(ALL_PLUGINS.keys())

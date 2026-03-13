@@ -333,16 +333,74 @@ class SSRFPlugin(BasePlugin):
 
         return findings
 
-    # ── 3. Detect proxy/fetch endpoints ───────────────────────────────────────
+    # ── 3. Detect proxy/fetch endpoints + OOB blind SSRF ─────────────────────
     async def _check_proxy_endpoints(self, target: TargetConfig, client: SecForgeClient) -> list[Finding]:
-        """Flag endpoints that look like fetch/proxy handlers for manual SSRF testing."""
+        """Flag endpoints that look like fetch/proxy handlers. Also attempts OOB blind SSRF confirmation."""
+        import asyncio as _aio
         findings: list[Finding] = []
+        job_id = getattr(target, "job_id", None)
+        oob_url = None
+        if job_id:
+            try:
+                import sys, os
+                sys.path.insert(0, "/root/.openclaw/workspace/secforge-saas")
+                from app.oob import get_oob_url, wait_for_callback
+                oob_url = get_oob_url(job_id, app_base_url="https://app.apiscan.ai")
+            except Exception:
+                oob_url = None
 
         for path in PROXY_PATHS:
             try:
                 resp = await client.get(path)
-                # 404/410 = not found, 429 = rate limited (not meaningful for SSRF)
-                if resp.status_code not in (404, 410, 429):
+                if resp.status_code in (404, 410, 429):
+                    continue
+
+                # Endpoint exists — try OOB blind SSRF injection
+                oob_confirmed = False
+                if oob_url:
+                    try:
+                        # Try injecting OOB URL as a fetch/url parameter
+                        for param in ["url", "fetch", "src", "uri", "link", "target"]:
+                            await client._client.post(
+                                target.url.rstrip("/") + path,
+                                json={param: oob_url},
+                                timeout=5.0,
+                            )
+                        # Wait for callback
+                        hit = await wait_for_callback(job_id, timeout=4.0)
+                        oob_confirmed = hit is not None
+                    except Exception:
+                        pass
+
+                if oob_confirmed:
+                    findings.append(Finding(
+                        plugin=self.name,
+                        title="SSRF — Blind Callback Confirmed (OOB)",
+                        severity=Severity.CRITICAL,
+                        status=FindingStatus.CONFIRMED,
+                        owasp_id=self.owasp_id,
+                        cwe_id="CWE-918",
+                        description=(
+                            f"Blind SSRF **confirmed** via out-of-band callback at `{path}`. "
+                            f"The server made an outbound HTTP request to the ApiScan OOB callback "
+                            f"server after receiving a URL injection payload. "
+                            f"**Impact**: Server-Side Request Forgery confirmed. Attacker can direct "
+                            f"the server to make arbitrary HTTP requests — cloud metadata access, "
+                            f"internal service pivoting, data exfiltration."
+                        ),
+                        endpoint=f"{target.url}{path}",
+                        evidence=[Evidence.from_httpx(
+                            resp.request, resp,
+                            note=f"OOB callback received — server made outbound request to {oob_url}",
+                        )],
+                        remediation=(
+                            "Implement strict URL allowlisting before making any outbound requests. "
+                            "Resolve DNS and block RFC1918 + link-local ranges. "
+                            "Use a dedicated outbound proxy with network-level blocking."
+                        ),
+                        references=["https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/"],
+                    ))
+                else:
                     findings.append(Finding(
                         plugin=self.name,
                         title="SSRF — Proxy/Fetch Endpoint Detected",
@@ -353,21 +411,19 @@ class SSRFPlugin(BasePlugin):
                         description=(
                             f"`{path}` returned HTTP {resp.status_code}. "
                             "Proxy and fetch endpoints are commonly vulnerable to SSRF. "
-                            "Manual testing with internal URLs and an OOB callback (e.g. "
-                            "Burp Collaborator) is recommended."
+                            + (f"OOB callback injection attempted but no callback received "
+                               f"(target may not be async or may block external requests)."
+                               if oob_url else
+                               "Manual testing with an OOB callback server is recommended.")
                         ),
                         endpoint=f"{target.url}{path}",
                         evidence=[Evidence.from_httpx(
                             resp.request, resp,
-                            note=(
-                                f"Endpoint {path} exists (HTTP {resp.status_code}). "
-                                "Proxy/fetch endpoints are high-risk SSRF candidates — "
-                                "manual verification recommended."
-                            ),
+                            note=f"Endpoint {path} exists (HTTP {resp.status_code}). Proxy/fetch endpoints are high-risk SSRF candidates.",
                         )],
                         remediation=(
                             "If this endpoint is intentional, enforce strict URL allowlisting. "
-                            "Block requests to RFC 1918 ranges, localhost, and link-local addresses."
+                            "Block requests to RFC1918 ranges, localhost, and link-local addresses."
                         ),
                     ))
             except Exception:

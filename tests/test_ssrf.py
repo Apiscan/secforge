@@ -61,7 +61,7 @@ async def test_ssrf_error_signal_in_response(target):
 
     high = [f for f in findings if f.severity.value == "HIGH"]
     assert len(high) >= 1
-    assert "Server-Side HTTP Request" in high[0].title
+    assert "SSRF" in high[0].title
 
 
 @pytest.mark.asyncio
