@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "secforge"
+name = "apiscan"
 version = "0.1.0"
 description = "ApiScan — CLI-native API security scanner — blackbox, evidence-based, CI/CD-ready"
 authors = [{name = "ApiScan", email = "security@apiscan.ai"}]
@@ -19,6 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
+apiscan = "secforge.cli.main:app"
 secforge = "secforge.cli.main:app"
 
 [project.optional-dependencies]
